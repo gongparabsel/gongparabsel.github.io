@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="bo">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>དབུ་མ་ལ་འཇུག་པའི་རྣམ་བཤད་དགོངས་པ་རབ་གསལ། - Horizontal Outline</title>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --node-bg: #ffffff;
+            --node-border: #adb5bd;
+            --node-hover: #e9ecef;
+            --node-has-children: #e3f2fd;
+            --line-color: #9ca3af;
+            --highlight-bg: #fef08a;
+            --highlight-border: #eab308;
+            --horizontal-gap: 30px;
+            --half-gap: 15px;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: var(--bg-color);
+            overflow: hidden;
+        }
+
+        #toolbar {
+            background-color: #ffffff;
+            padding: 10px 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            z-index: 10;
+        }
+
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .divider {
+            width: 1px;
+            height: 24px;
+            background-color: #ccc;
+            margin: 0 5px;
+        }
+
+        input[type="text"], input[type="number"] {
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        button {
+            padding: 6px 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #tree-container {
+            flex-grow: 1;
+            overflow: auto;
+            padding: 40px;
+            position: relative;
+            display: flex;
+            align-items: center; 
+            justify-content: flex-start;
+        }
+
+        #tree-wrapper {
+            transform-origin: left center;
+            transition: transform 0.2s ease-out;
+            display: inline-block;
+            visibility: hidden; /* Hidden until sizes are normalized */
+        }
+
+        /* --- Horizontal Tree CSS --- */
+        
+        .tree-ul {
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            margin-left: var(--horizontal-gap);
+            position: relative;
+        }
+
+        .tree-ul.root-ul {
+            margin-left: 0;
+        }
+
+        .tree-li {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            position: relative;
+            padding: 4px 0;
+        }
+
+        /* Connecting Lines */
+
+        /* 1. Parent Line OUT (from node right to midpoint) */
+        .tree-li:not(.collapsed) > .node.has-children::before {
+            content: '';
+            position: absolute;
+            right: calc(var(--half-gap) * -1);
+            top: 50%;
+            width: var(--half-gap);
+            border-top: 1px solid var(--line-color);
+            z-index: 0;
+        }
+
+        /* 2. Vertical Spine (on child li left edge) */
+        .tree-li:not(.root-li)::before {
+            content: '';
+            position: absolute;
+            left: calc(var(--half-gap) * -1);
+            top: 0;
+            bottom: 0;
+            border-left: 1px solid var(--line-color);
+            z-index: 0;
+        }
+        /* Fix spine bounds for first and last child */
+        .tree-li:not(.root-li):first-child::before {
+            top: 50%;
+        }
+        .tree-li:not(.root-li):last-child::before {
+            bottom: 50%;
+        }
+
+        /* 3. Child Line IN (from spine to node left) */
+        .tree-li:not(.root-li)::after {
+            content: '';
+            position: absolute;
+            left: calc(var(--half-gap) * -1);
+            top: 50%;
+            width: var(--half-gap);
+            border-top: 1px solid var(--line-color);
+            z-index: 0;
+        }
+
+        /* Single child fix */
+        .tree-li:not(.root-li):first-child:last-child::before {
+            display: none; 
+        }
+
+        /* Node Styling */
+        .node {
+            display: inline-flex;
+            align-items: center;
+            justify-content: space-between; /* Space out text and arrow uniformly */
+            box-sizing: border-box; /* Includes padding/border in the fixed width */
+            border: 1px solid var(--node-border);
+            border-radius: 8px;
+            padding: 4px 10px;
+            background-color: var(--node-bg);
+            cursor: pointer;
+            font-family: 'Microsoft Himalaya', 'Tibetan Machine Uni', 'Kailasa', sans-serif;
+            font-size: 18px;
+            line-height: 1.4;
+            user-select: none;
+            white-space: nowrap;
+            transition: background 0.2s, box-shadow 0.2s, border-color 0.2s;
+            position: relative;
+            z-index: 1; 
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .node > span.node-text {
+            flex-grow: 1;
+            text-align: left;
+        }
+
+        .node.has-children {
+            background-color: var(--node-has-children);
+            border-color: #90caf9;
+        }
+
+        .node:hover {
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            background-color: var(--node-hover);
+        }
+
+        .node.highlight {
+            background-color: var(--highlight-bg);
+            border-color: var(--highlight-border);
+            box-shadow: 0 0 8px rgba(234, 179, 8, 0.6);
+        }
+
+        .toggle-icon {
+            font-size: 10px;
+            color: #555;
+            margin-left: 12px;
+            flex-shrink: 0;
+            display: inline-block;
+            transition: transform 0.3s ease;
+        }
+
+        .collapsed > .node .toggle-icon {
+            transform: rotate(-90deg);
+        }
+
+        /* Collapsed State */
+        .tree-li.collapsed > .tree-ul {
+            display: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="toolbar">
+        <div class="tool-group">
+            <input type="text" id="searchInput" placeholder="Search topic..." onkeypress="if(event.key === 'Enter') searchTree()">
+            <button onclick="searchTree()">Search</button>
+        </div>
+        <div class="divider"></div>
+        <div class="tool-group">
+            <button onclick="expandAll()">Expand All</button>
+            <button onclick="collapseAll()">Collapse All</button>
+        </div>
+        <div class="divider"></div>
+        <div class="tool-group">
+            <button onclick="changeZoom(-10)">-</button>
+            <input type="number" id="zoomInput" value="100" min="10" max="500" step="10" style="width: 60px;" onchange="applyManualZoom()"> <span>%</span>
+            <button onclick="changeZoom(10)">+</button>
+        </div>
+        <div class="divider"></div>
+        <div class="tool-group">
+            <input type="checkbox" id="autoZoomCheck" onchange="triggerAutoZoom()" checked>
+            <label for="autoZoomCheck" style="font-size: 14px; user-select: none; cursor: pointer;">Auto-Zoom to Fit</label>
+        </div>
+    </div>
+
+    <div id="tree-container">
+        <div id="tree-wrapper">
+            <ul class="tree-ul root-ul" id="root-ul">
+                <!-- Tree will be injected here -->
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const rawData = `བསྟན་བཅོས་ཆེན་པོ་དབུ་མ་ལ་འཇུག་པའི་རྣམ་བཤད་དགོངས་པ་རབ་གསལ།
+	༡༽ མཚན་གྱི་དོན།
+	༢༽ འགྱུར་གྱི་ཕྱག
+	༣༽ གཞུང་གི་དོན།
+		༡༽ བསྟན་བཅོས་རྩོམ་པ་ལ་འཇུག་པའི་ཐབས་མཆོད་པར་བརྗོད་པ།
+			༡༽ སྙིང་རྗེ་ཆེན་པོ་ལ་སོ་སོར་མ་ཕྱེ་བར་བསྟོད་པ།
+			༢༽ སྙིང་རྗེ་ཆེན་པོ་ལ་སོ་སོར་ཕྱེ་སྟེ་ཕྱག་འཚལ་བ།
+		༢༽ བརྩམས་པའི་བསྟན་བཅོས་ཀྱི་ལུས་དངོས།
+			༡༽ རྒྱུའི་ས།
+				༡༽ ལུགས་འདིའི་ལམ་ཉམས་སུ་ལེན་ཚུལ་སྤྱིར་བསྟན་པ།
+				༢༽ བྱེ་བྲག་ཏུ་སོ་སྐྱེའི་སར་ཉམས་སུ་ལེན་ཚུལ་བཤད་པ།
+				༣༽ བྱང་སེམས་འཕགས་པའི་སའི་རྣམ་གཞག་བསྟན་པ།
+					༡༽ ས་བཅུའི་ཐུན་མོང་གི་རྣམ་གཞག
+					༢༽ ས་སོ་སོའི་རྣམ་གཞག
+						༡༽ རབ་དགའ་སོགས་ས་ལྔ་བཤད་པ།
+							༡༽ ས་དང་པོ་རབ་ཏུ་དགའ་བ།
+								༡༽ ཁྱད་གཞི་སའི་ངོ་བོ་མདོར་བསྟན།
+								༢༽ ཁྱད་ཆོས་སའི་ཡོན་ཏན་རྒྱས་པར་བཤད་པ།
+									༡༽ རང་གི་རྒྱུད་མཛེས་པར་བྱེད་པའི་ཡོན་ཏན།
+									༢༽ གཞན་གྱི་རྒྱུད་ཟིལ་གྱིས་གནོན་པའི་ཡོན་ཏན།
+										༡༽ ས་འདིར་ཉན་རང་རྣམས་རིགས་ཀྱི་སྒོ་ནས་ཟིལ་གྱིས་གནོན་པ།
+										༢༽ ས་བདུན་པར་ཉན་རང་གཉིས་བློའི་སྒོ་ནས་ཟིལ་གྱིས་གནོན་པ།
+										༣༽ དེ་ལྟར་གསུངས་པས་གྲུབ་པའི་དོན་བཤད་པ།
+											༡༽ ས་བཅུ་པའི་མདོས་ཉན་རང་ལ་ཆོས་རང་བཞིན་མེད་པར་རྟོགས་པ་ཡོད་པར་བསྟན་པ།
+											༢༽ དེ་སྒྲུབ་པའི་ཁུངས་བསྟན་པ།
+											༣༽ དེ་ལྟར་བསྟན་པ་ལ་རྩོད་པ་སྤང་བ།
+									༣༽ ས་དང་པོར་ལྷག་པའི་ཡོན་ཏན་བསྟན་པ།
+								༣༽ ས་ཡི་ཡོན་ཏན་བརྗོད་པའི་སྒོ་ནས་མཇུག་བསྡུ་བ།
+							༢༽ ས་གཉིས་པ་དྲི་མ་མེད་པ་བཤད་པ།
+								༡༽ ས་འདིར་ཚུལ་ཁྲིམས་ཡོངས་སུ་དག་པར་བསྟན་པ།
+								༢༽ ཚུལ་ཁྲིམས་ཀྱི་བསྔགས་པ་བསྟན་པ།
+								༣༽ ཚུལ་ཁྲིམས་ཀྱི་མི་མཐུན་ཕྱོགས་དང་མ་འདྲེས་པའི་དཔེ་བསྟན་པ།
+							༣༽ ས་གསུམ་པ་འོད་བྱེད་པ་བཤད་པ།
+								༡༽ ཁྱད་པར་གྱི་གཞི་སའི་ངེས་ཚིག
+								༢༽ ཁྱད་པར་གྱི་ཆོས་སའི་ཡོན་ཏན།
+									༡༽ ས་འདིར་བཟོད་པ་ལྷག་པར་བསྟན་པ།
+									༢༽ བཟོད་པ་གཞན་ཇི་ལྟར་བསྟེན་པའི་ཚུལ།
+									༣༽ བཟོད་པའི་ཕར་ཕྱིན་གྱི་དབྱེ་བ།
+								༣༽ ཕར་ཕྱིན་དང་པོ་གསུམ་གྱི་ཁྱད་པར་གྱི་ཆོས།
+								༤༽ སའི་ཡོན་ཏན་བརྗོད་པའི་སྒོ་ནས་མཇུག་བསྡུ་བ།
+							༤༽ ས་བཞི་པ་འོད་འཕྲོ་བ་བཤད་པ།
+								༡༽ ས་འདིར་བརྩོན་འགྲུས་ལྷག་པར་བསྟན་པ།
+								༢༽ སའི་ངེས་པའི་ཚིག་བསྟན་པ།
+							༥༽ ས་ལྔ་པ་སྦྱང་དཀའ་བ་བཤད་པ།
+								༡༽ ས་ལྔ་པའི་ངེས་པའི་ཚིག་བཤད་པ།
+								༢༽ བསམ་གཏན་ལྷག་ཅིང་བདེན་པ་ལ་མཁས་པར་བསྟན་པ།
+						༢༽ ས་དྲུག་པ་མངོན་དུ་གྱུར་པ་བཤད་པ།
+							༡༽ སའི་ངེས་ཚིག་དང་ཤེར་ཕྱིན་ལྷག་པར་བསྟན་པ།
+							༢༽ ཤེས་རབ་ཀྱི་ཕར་ཕྱིན་གྱི་བསྔགས་པ།
+							༣༽ ཟབ་མོ་རྟེན་འབྱུང་གཟིགས་པའི་དེ་ཁོ་ན་ཉིད་བཤད་པ།
+								༡༽ ཟབ་མོའི་དོན་བཤད་པར་དམ་བཅའ་བ།
+								༢༽ ཟབ་མོའི་དོན་བཤད་པའི་སྣོད་ངོས་བཟུང་བ།
+								༣༽ ཟབ་མོའི་དོན་ལ་བཤད་ན་ཡོན་ཏན་འབྱུང་ཚུལ།
+								༤༽ སྣོད་ལྡན་གྱི་གང་ཟག་ལ་མཉན་པར་བསྐུལ་བ།
+								༥༽ རྟེན་འབྱུང་གི་དེ་ཉིད་ཇི་ལྟར་བཤད་པའི་ཚུལ།
+									༡༽ ཡང་དག་པའི་དོན་ལུང་གིས་བསྟན་པའི་ཚུལ།
+									༢༽ ལུང་གི་དོན་དེ་རིགས་པས་བསྒྲུབ་པ།
+										༡༽ ཆོས་ཀྱི་བདག་མེད་རིགས་པས་བསྒྲུབ་པ།
+											༡༽ མཐའ་བཞིའི་སྐྱེ་བ་བདེན་པ་གཉིས་ཀར་དགག་པ།
+												༡༽ རང་བཞིན་གྱིས་སྐྱེ་བ་མེད་པའི་དམ་བཅའ་བཞག་པ།
+												༢༽ དེ་རིགས་པས་སྒྲུབ་པའི་སྒྲུབ་བྱེད་བསྟན་པ།
+													༡༽ བདག་སྐྱེ་དགག་པ།
+													༢༽ གཞན་སྐྱེ་དགག་པ།
+														༡༽ ཕྱོགས་སྔ་མ་བརྗོད་པ།
+														༢༽ ལུགས་དེ་དགག་པ།
+															༡༽ གཞན་སྐྱེ་འདོད་པའི་ཕྱོགས་སྤྱིར་དགག་པ།
+																༡༽ གཞན་སྐྱེ་དགག་པ་དངོས།
+																༢༽ བཀག་པ་ལ་འཇིག་རྟེན་གྱིས་གནོད་པ་སྤང་བ།																
+																༣༽ དེ་ལྟར་བཀག་པའི་ཡོན་ཏན་བསྟན་པ།
+																༤༽ རང་བཞིན་གྱིས་སྐྱེ་བ་འགར་ཡང་མེད་པར་བསྟན་པ།
+																༥༽ བདེན་པ་གཉིས་ཆར་དུའང་རང་བཞིན་གྱིས་སྐྱེ་བ་བཀག་པའི་ཡོན་ཏན་བསྟན་པ།
+															༢༽ སེམས་ཙམ་པའི་ལུགས་བྱེ་བྲག་ཏུ་དགག་པ།
+																༡༽ ཕྱི་རོལ་མེད་པའི་ཤེས་པ་རང་བཞིན་གྱིས་གྲུབ་པ་དགག་པ།
+																༢༽ གཞན་དབང་རང་བཞིན་གྱིས་གྲུབ་པའི་སྒྲུབ་བྱེད་ཚད་མ་དགག་པ།
+																	༡༽ གཞན་དབང་གི་སྒྲུབ་བྱེད་རང་རིག་དགག་པ།
+																	༢༽ སེམས་ཙམ་པའི་ལུགས་བདེན་པ་གཉིས་ཆར་ལས་ཉམས་པར་བསྟན་པ།
+																	༣༽ དེས་ན་ཀླུ་སྒྲུབ་ཀྱི་ལུགས་ཁོ་ནའི་རྗེས་སུ་འབྲང་བར་རིགས་པ།
+																	༤༽ གཞན་དབང་དང་འཇིག་རྟེན་གྱི་ཐ་སྙད་འགོག་པ་མི་མཚུངས་པར་བསྟན་པ།
+																༣༽ སེམས་ཙམ་དུ་གསུངས་པའི་ཙམ་གྱི་སྒྲས་ཕྱི་དོན་འགོག་པར་མིན་པར་བསྟན་པ།
+																	༡༽ ས་བཅུ་པ་ལས་སེམས་ཙམ་དུ་གསུངས་པའི་དགོངས་པ་བཤད་པ།
+																	༢༽ ཕྱི་རོལ་དང་ནང་གི་སེམས་གཉིས་ཡོད་མེད་མཚུངས་པར་བསྟན་པ།
+																	༣༽ ལང་ཀར་གཤེགས་པ་ལས་སེམས་ཙམ་དུ་གསུངས་པའི་དགོངས་པ་བཤད་པ།
+													༣༽ གཉིས་ཀ་ལས་སྐྱེ་བ་དགག་པ།
+												༣༽ མཐའ་བཞིའི་སྐྱེ་བ་བཀག་པས་གྲུབ་པའི་དོན།
+											༢༽ མཐའ་བཞིའི་སྐྱེ་བ་བཀག་པ་ལ་རྩོད་པ་སྤང་བ།
+											༣༽ རྟེན་འབྱུང་གི་སྐྱེ་བ་ཉིད་ཀྱིས་མཐར་འཛིན་གྱི་ལོག་རྟོག་འགོག་ཚུལ།
+										༢༽ གང་ཟག་གི་བདག་མེད་རིགས་པས་བསྒྲུབ་པ།
+											༡༽ ཐར་འདོད་ཀྱིས་ཐོག་མར་བདག་རང་བཞིན་གྱིས་གྲུབ་པ་ཉིད་དགག་དགོས་པར་བསྟན་པ།
+											༢༽ བདག་དང་བདག་གི་བ་གཉིས་རང་བཞིན་གྱིས་གྲུབ་པ་འགོག་པའི་ཚུལ།
+												༡༽ བདག་རང་བཞིན་གྱིས་གྲུབ་པ་དགག་པ།
+													༡༽ གཞན་སྡེས་བཏགས་པའི་ཕུང་པོ་ལས་ངོ་བོ་ཐ་དད་པའི་བདག་དགག་པ།
+													༢༽ རང་སྡེས་བཏགས་པའི་ཕུང་པོ་ཉིད་བདག་ཏུ་འདོད་པ་དགག་པ།
+													༣༽ དེ་གཉིས་ཀྱི་ལྷག་མའི་ཕྱོགས་རྟེན་དང་བརྟེན་པ་སོགས་གསུམ་དགག་པ།
+													༤༽ དེ་ཉིད་དང་གཞན་དུ་བརྗོད་དུ་མེད་པའི་གང་ཟག་རྫས་ཡོད་དགག་པ།
+													༥༽ བདག་བརྟེན་ནས་བཏགས་པ་ཙམ་དུ་བཞག་པ་དཔེ་དང་བཅས་པ།
+													༦༽ དེ་ལྟར་བཞག་པ་ལ་མཐར་འཛིན་གྱིས་རྟོག་པ་སྤང་སླ་བའི་ཡོན་ཏན་བསྟན་པ།
+												༢༽ བདག་གི་བ་རང་བཞིན་གྱིས་གྲུབ་པ་དགག་པ།
+											༣༽ བདག་དང་ཤིང་རྟའི་དཔྱད་པ་དངོས་པོ་གཞན་ལ་ཡང་བསྒྲེ་བར་བསྟན་པ།
+												༡༽ བུམ་སྣམ་སོགས་ཀྱི་དངོས་པོ་ལ་བསྒྲེ་བ།
+												༢༽ རྒྱུ་དང་འབྲས་བུའི་དངོས་པོ་ལ་བསྒྲེ་བ།
+												༣༽ དེ་ལ་གཞན་གྱི་རྩོད་པ་སྤང་བ།
+									༣༽ དེས་གྲུབ་པའི་སྟོང་ཉིད་ཀྱི་རབ་དབྱེ་བཤད་པ།
+										༡༽ སྟོང་པ་ཉིད་ཀྱི་དབྱེ་བ་མདོར་བསྟན་པ།
+										༢༽ ཕྱེ་བ་སོ་སོའི་དོན་རྒྱས་པར་བཤད་པ།
+							༤༽ སའི་ཡོན་ཏན་བརྗོད་པའི་སྒོ་ནས་མཇུག་བསྡུ་བ།
+						༣༽ རིང་དུ་སོང་བ་སོགས་བཞི་བཤད་པ།
+							༡༽ ས་བདུན་པ་བཤད་པ།
+							༢༽ ས་བརྒྱད་པ་བཤད་པ།
+								༡༽ ས་འདིར་སྨོན་ལམ་ལྷག་ཅིང་འགོག་པ་ལས་སློང་ཚུལ།
+								༢༽ ཉོན་མོངས་ཐམས་ཅད་ཟད་པར་བསྟན་པ།
+					༣༽ ས་བཅུའི་ཡོན་ཏན་བསྟན་པ།
+						༡༽ ས་དང་པོའི་ཡོན་ཏན་བཤད་པ།
+						༢༽ ས་གཉིས་པ་ནས་བདུན་པ་བར་གྱི་ཡོན་ཏན་བཤད་པ།
+						༣༽ དག་པ་ས་གསུམ་གྱི་ཡོན་ཏན་བཤད་པ།
+			༢༽ འབྲས་བུའི་ས།
+				༡༽ དང་པོར་སངས་རྒྱས་པའི་ཚུལ།
+				༢༽ སྐུ་དང་ཡོན་ཏན་གྱི་རྣམ་གཞག
+					༡༽ སྐུའི་རྣམ་གཞག
+					༢༽ སྟོབས་ཀྱི་ཡོན་ཏན་གྱི་རྣམ་གཞག
+				༣༽ སྤྲུལ་པའི་སྐུ་བསྟན་པ།
+				༤༽ ཐེག་པ་གཅིག་ཏུ་བསྒྲུབ་པ།
+				༥༽ མངོན་པར་བྱང་ཆུབ་པ་དང་བཞུགས་པའི་དུས་བཤད་པ།
+		༣༽ བསྟན་བཅོས་ཇི་ལྟར་བརྩམས་པའི་ཚུལ།
+	༤༽ མཇུག་གི་དོན།`;
+
+        // 1. Parse Data to Tree Structure
+        function parseOutline(text) {
+            const lines = text.split('\n');
+            const root = { text: lines[0].trim(), children: [], level: -1 };
+            const stack = [root];
+
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
+                if (!line.trim()) continue;
+                
+                const levelMatch = line.match(/^\t*/);
+                const level = levelMatch ? levelMatch[0].length : 0;
+                const nodeText = line.trim();
+                
+                const node = { text: nodeText, children: [], level: level };
+
+                while (stack.length > 0 && stack[stack.length - 1].level >= level) {
+                    stack.pop();
+                }
+
+                const parent = stack[stack.length - 1];
+                parent.children.push(node);
+                stack.push(node);
+            }
+            return root;
+        }
+
+        // 2. Render HTML DOM Tree
+        function renderNode(node, isRoot = false) {
+            const li = document.createElement('li');
+            li.className = 'tree-li' + (isRoot ? ' root-li' : ''); // Start uncollapsed to measure sizes
+            
+            const div = document.createElement('div');
+            div.className = 'node' + (node.children.length > 0 ? ' has-children' : '');
+            div.setAttribute('data-level', node.level); // Store hierarchy level
+            
+            const textSpan = document.createElement('span');
+            textSpan.className = 'node-text';
+            textSpan.textContent = node.text;
+            div.appendChild(textSpan);
+            
+            if (node.children.length > 0) {
+                const icon = document.createElement('span');
+                icon.className = 'toggle-icon';
+                icon.innerHTML = '▼';
+                div.appendChild(icon);
+
+                div.onclick = function(e) {
+                    e.stopPropagation();
+                    li.classList.toggle('collapsed');
+                    triggerAutoZoom();
+                };
+            }
+            
+            li.appendChild(div);
+
+            if (node.children.length > 0) {
+                const ul = document.createElement('ul');
+                ul.className = 'tree-ul';
+                node.children.forEach(child => {
+                    ul.appendChild(renderNode(child));
+                });
+                li.appendChild(ul);
+            }
+            return li;
+        }
+
+        // Apply max width/height by structural level
+        function normalizeNodeSizes() {
+            const nodes = document.querySelectorAll('.node');
+            const levels = {};
+            
+            // Group nodes by their structural depth
+            nodes.forEach(node => {
+                const level = node.getAttribute('data-level');
+                if (!levels[level]) levels[level] = [];
+                levels[level].push(node);
+            });
+            
+            // Apply maximum dimensions to all nodes sharing the same level
+            for (const level in levels) {
+                let maxWidth = 0;
+                let maxHeight = 0;
+                
+                // First pass: find biggest natural dimensions
+                levels[level].forEach(node => {
+                    if (node.offsetWidth > maxWidth) maxWidth = node.offsetWidth;
+                    if (node.offsetHeight > maxHeight) maxHeight = node.offsetHeight;
+                });
+                
+                // Second pass: apply uniformly
+                levels[level].forEach(node => {
+                    node.style.width = maxWidth + 'px';
+                    node.style.height = maxHeight + 'px';
+                });
+            }
+        }
+
+        // Initialize Tree
+        const treeData = parseOutline(rawData);
+        const rootUl = document.getElementById('root-ul');
+        const treeWrapper = document.getElementById('tree-wrapper');
+        
+        // Render nodes and append to DOM (invisible state)
+        rootUl.appendChild(renderNode(treeData, true));
+
+        // Once in DOM, calculate and apply uniform sizes per level
+        normalizeNodeSizes();
+
+        // Now that sizes are fixed, apply collapse state to non-root nodes
+        document.querySelectorAll('.tree-li').forEach(li => {
+            if (!li.classList.contains('root-li')) {
+                li.classList.add('collapsed');
+            }
+        });
+
+        // Make visible and trigger Auto-Zoom
+        treeWrapper.style.visibility = 'visible';
+
+        // 3. Zoom Logic
+        let currentZoom = 100;
+        const zoomInput = document.getElementById('zoomInput');
+        const treeContainer = document.getElementById('tree-container');
+        const autoZoomCheck = document.getElementById('autoZoomCheck');
+
+        function setZoom(percentage) {
+            currentZoom = Math.max(10, Math.min(percentage, 500));
+            zoomInput.value = Math.round(currentZoom);
+            treeWrapper.style.transform = `scale(${currentZoom / 100})`;
+        }
+
+        function changeZoom(delta) {
+            autoZoomCheck.checked = false; // Disable auto zoom on manual interaction
+            setZoom(currentZoom + delta);
+        }
+
+        function applyManualZoom() {
+            autoZoomCheck.checked = false;
+            let val = parseFloat(zoomInput.value);
+            if (!isNaN(val)) setZoom(val);
+        }
+
+        function triggerAutoZoom() {
+            if (!autoZoomCheck.checked) return;
+            
+            setTimeout(() => {
+                const containerWidth = treeContainer.clientWidth - 80; 
+                const containerHeight = treeContainer.clientHeight - 80;
+                
+                treeWrapper.style.transform = 'scale(1)';
+                const contentWidth = treeWrapper.offsetWidth;
+                const contentHeight = treeWrapper.offsetHeight;
+                
+                if (contentWidth > 0 && contentHeight > 0) {
+                    const scaleX = containerWidth / contentWidth;
+                    const scaleY = containerHeight / contentHeight;
+                    let scale = Math.min(scaleX, scaleY);
+                    
+                    scale = Math.max(0.1, Math.min(scale, 1.2)); // Adjusted lower bound to 0.1 for very large trees
+                    setZoom(scale * 100);
+                } else {
+                    setZoom(currentZoom);
+                }
+            }, 50);
+        }
+
+        // 4. Expand / Collapse Functions
+        function expandAll() {
+            document.querySelectorAll('.tree-li').forEach(li => {
+                li.classList.remove('collapsed');
+            });
+            triggerAutoZoom();
+        }
+
+        function collapseAll() {
+            document.querySelectorAll('.tree-li').forEach(li => {
+                if (!li.classList.contains('root-li')) {
+                    li.classList.add('collapsed');
+                }
+            });
+            triggerAutoZoom();
+        }
+
+        // 5. Search Logic
+        function searchTree() {
+            const query = document.getElementById('searchInput').value.trim();
+            const allNodes = document.querySelectorAll('.node');
+            const allLis = document.querySelectorAll('.tree-li');
+
+            // Reset Tree
+            allNodes.forEach(n => n.classList.remove('highlight'));
+            allLis.forEach(li => {
+                if (!li.classList.contains('root-li')) {
+                    li.classList.add('collapsed');
+                }
+            });
+
+            if (!query) {
+                triggerAutoZoom();
+                return;
+            }
+
+            allNodes.forEach(n => {
+                if (n.querySelector('.node-text').textContent.includes(query)) {
+                    n.classList.add('highlight');
+                    
+                    // Expand path to root
+                    let parentLi = n.closest('.tree-li');
+                    while (parentLi) {
+                        parentLi.classList.remove('collapsed');
+                        parentLi = parentLi.parentElement.closest('.tree-li');
+                    }
+                }
+            });
+
+            triggerAutoZoom();
+        }
+
+        // Init auto-zoom
+        window.onload = () => {
+            triggerAutoZoom();
+        };
+
+        // Re-adjust zoom when window is resized if auto-zoom is checked
+        window.addEventListener('resize', () => {
+            if (autoZoomCheck.checked) {
+                triggerAutoZoom();
+            }
+        });
+
+    </script>
+</body>
+</html>
