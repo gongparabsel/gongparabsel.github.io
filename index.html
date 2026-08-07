@@ -18,8 +18,6 @@
             --node-hover: #e9ecef;
             --node-has-children: #e3f2fd;
             --line-color: #9ca3af;
-            --highlight-bg: #fef08a;
-            --highlight-border: #eab308;
             --horizontal-gap: 30px;
             --half-gap: 15px;
         }
@@ -59,7 +57,7 @@
             margin: 0 5px;
         }
 
-        input[type="text"], input[type="number"] {
+        input[type="number"] {
             padding: 6px 10px;
             border: 1px solid #ccc;
             border-radius: 4px;
@@ -210,12 +208,6 @@
             background-color: var(--node-hover);
         }
 
-        .node.highlight {
-            background-color: var(--highlight-bg);
-            border-color: var(--highlight-border);
-            box-shadow: 0 0 8px rgba(234, 179, 8, 0.6);
-        }
-
         .toggle-icon {
             font-size: 10px;
             color: #555;
@@ -239,11 +231,6 @@
 <body>
 
     <div id="toolbar">
-        <div class="tool-group">
-            <input type="text" id="searchInput" placeholder="Search topic..." onkeypress="if(event.key === 'Enter') searchTree()">
-            <button onclick="searchTree()">Search</button>
-        </div>
-        <div class="divider"></div>
         <div class="tool-group">
             <button onclick="expandAll()">Expand All</button>
             <button onclick="collapseAll()">Collapse All</button>
@@ -282,8 +269,8 @@
 				༡༽ ལུགས་འདིའི་ལམ་ཉམས་སུ་ལེན་ཚུལ་སྤྱིར་བསྟན་པ།
 				༢༽ བྱེ་བྲག་ཏུ་སོ་སྐྱེའི་སར་ཉམས་སུ་ལེན་ཚུལ་བཤད་པ།
 				༣༽ བྱང་སེམས་འཕགས་པའི་སའི་རྣམ་གཞག་བསྟན་པ།
-					༡༽ ས་བཅུའི་ཐུན་མོང་གི་རྣམ་གཞག
-					༢༽ ས་སོ་སོའི་རྣམ་གཞག
+					༡༽ ས་བཅུའི་ཐུན་མོང་གི་རྣམ་གཞག།
+					༢༽ ས་སོ་སོའི་རྣམ་གཞག།
 						༡༽ རབ་དགའ་སོགས་ས་ལྔ་བཤད་པ།
 							༡༽ ས་དང་པོ་རབ་ཏུ་དགའ་བ།
 								༡༽ ཁྱད་གཞི་སའི་ངོ་བོ་མདོར་བསྟན།
@@ -303,7 +290,7 @@
 								༢༽ ཚུལ་ཁྲིམས་ཀྱི་བསྔགས་པ་བསྟན་པ།
 								༣༽ ཚུལ་ཁྲིམས་ཀྱི་མི་མཐུན་ཕྱོགས་དང་མ་འདྲེས་པའི་དཔེ་བསྟན་པ།
 							༣༽ ས་གསུམ་པ་འོད་བྱེད་པ་བཤད་པ།
-								༡༽ ཁྱད་པར་གྱི་གཞི་སའི་ངེས་ཚིག
+								༡༽ ཁྱད་པར་གྱི་གཞི་སའི་ངེས་ཚིག།
 								༢༽ ཁྱད་པར་གྱི་ཆོས་སའི་ཡོན་ཏན།
 									༡༽ ས་འདིར་བཟོད་པ་ལྷག་པར་བསྟན་པ།
 									༢༽ བཟོད་པ་གཞན་ཇི་ལྟར་བསྟེན་པའི་ཚུལ།
@@ -386,9 +373,9 @@
 						༣༽ དག་པ་ས་གསུམ་གྱི་ཡོན་ཏན་བཤད་པ།
 			༢༽ འབྲས་བུའི་ས།
 				༡༽ དང་པོར་སངས་རྒྱས་པའི་ཚུལ།
-				༢༽ སྐུ་དང་ཡོན་ཏན་གྱི་རྣམ་གཞག
-					༡༽ སྐུའི་རྣམ་གཞག
-					༢༽ སྟོབས་ཀྱི་ཡོན་ཏན་གྱི་རྣམ་གཞག
+				༢༽ སྐུ་དང་ཡོན་ཏན་གྱི་རྣམ་གཞག།
+					༡༽ སྐུའི་རྣམ་གཞག།
+					༢༽ སྟོབས་ཀྱི་ཡོན་ཏན་གྱི་རྣམ་གཞག།
 				༣༽ སྤྲུལ་པའི་སྐུ་བསྟན་པ།
 				༤༽ ཐེག་པ་གཅིག་ཏུ་བསྒྲུབ་པ།
 				༥༽ མངོན་པར་བྱང་ཆུབ་པ་དང་བཞུགས་པའི་དུས་བཤད་པ།
@@ -587,41 +574,6 @@
                     li.classList.add('collapsed');
                 }
             });
-            triggerAutoZoom();
-        }
-
-        // 5. Search Logic
-        function searchTree() {
-            const query = document.getElementById('searchInput').value.trim();
-            const allNodes = document.querySelectorAll('.node');
-            const allLis = document.querySelectorAll('.tree-li');
-
-            // Reset Tree
-            allNodes.forEach(n => n.classList.remove('highlight'));
-            allLis.forEach(li => {
-                if (!li.classList.contains('root-li')) {
-                    li.classList.add('collapsed');
-                }
-            });
-
-            if (!query) {
-                triggerAutoZoom();
-                return;
-            }
-
-            allNodes.forEach(n => {
-                if (n.querySelector('.node-text').textContent.includes(query)) {
-                    n.classList.add('highlight');
-                    
-                    // Expand path to root
-                    let parentLi = n.closest('.tree-li');
-                    while (parentLi) {
-                        parentLi.classList.remove('collapsed');
-                        parentLi = parentLi.parentElement.closest('.tree-li');
-                    }
-                }
-            });
-
             triggerAutoZoom();
         }
 
