@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>དབུ་མ་ལ་འཇུག་པའི་རྣམ་བཤད་དགོངས་པ་རབ་གསལ། - Horizontal Outline</title>
+    <title>དབུ་མ་ལ་འཇུག་པའི་རྣམ་བཤད་དགོངས་པ་རབ་གསལ། - Horizontal Outline with SVG Connectors</title>
     
     <!-- Import Noto Sans Tibetan as a robust web fallback for Tibetan scripts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,8 +18,6 @@
             --node-hover: #e9ecef;
             --node-has-children: #e3f2fd;
             --line-color: #9ca3af;
-            --horizontal-gap: 30px;
-            --half-gap: 15px;
         }
 
         body {
@@ -79,95 +77,42 @@
             background-color: #0056b3;
         }
 
+        /* Container & SVG Layout */
         #tree-container {
             flex-grow: 1;
             overflow: auto;
-            padding: 40px;
             position: relative;
-            display: flex;
-            align-items: center; 
-            justify-content: flex-start;
+            background-color: var(--bg-color);
         }
 
-        #tree-wrapper {
-            transform-origin: left center;
-            transition: transform 0.2s ease-out;
-            display: inline-block;
-            visibility: hidden; /* Hidden until sizes are normalized */
+        #main-svg {
+            display: block;
+            opacity: 0; /* Fades in once font measurements are done */
+            transition: opacity 0.3s ease;
+            overflow: visible;
         }
 
-        /* --- Horizontal Tree CSS --- */
-        
-        .tree-ul {
-            display: flex;
-            flex-direction: column;
-            margin: 0;
-            padding: 0;
-            list-style: none;
-            margin-left: var(--horizontal-gap);
-            position: relative;
+        #main-g {
+            transform-origin: 0 0;
+            transition: transform 0.4s ease;
         }
 
-        .tree-ul.root-ul {
-            margin-left: 0;
+        .node-g {
+            transition: transform 0.4s ease, opacity 0.4s ease;
         }
 
-        .tree-li {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            position: relative;
-            padding: 6px 0; /* Slightly increased vertical padding for larger line height */
+        .link {
+            fill: none;
+            stroke: var(--line-color);
+            stroke-width: 1.5px;
+            transition: d 0.4s ease, opacity 0.4s ease;
         }
 
-        /* Connecting Lines */
-
-        /* 1. Parent Line OUT (from node right to midpoint) */
-        .tree-li:not(.collapsed) > .node.has-children::before {
-            content: '';
-            position: absolute;
-            right: calc(var(--half-gap) * -1);
-            top: 50%;
-            width: var(--half-gap);
-            border-top: 1px solid var(--line-color);
-            z-index: 0;
+        /* Node HTML DOM Styling inside SVG */
+        .node-foreignObject {
+            overflow: visible;
         }
 
-        /* 2. Vertical Spine (on child li left edge) */
-        .tree-li:not(.root-li)::before {
-            content: '';
-            position: absolute;
-            left: calc(var(--half-gap) * -1);
-            top: 0;
-            bottom: 0;
-            border-left: 1px solid var(--line-color);
-            z-index: 0;
-        }
-        /* Fix spine bounds for first and last child */
-        .tree-li:not(.root-li):first-child::before {
-            top: 50%;
-        }
-        .tree-li:not(.root-li):last-child::before {
-            bottom: 50%;
-        }
-
-        /* 3. Child Line IN (from spine to node left) */
-        .tree-li:not(.root-li)::after {
-            content: '';
-            position: absolute;
-            left: calc(var(--half-gap) * -1);
-            top: 50%;
-            width: var(--half-gap);
-            border-top: 1px solid var(--line-color);
-            z-index: 0;
-        }
-
-        /* Single child fix */
-        .tree-li:not(.root-li):first-child:last-child::before {
-            display: none; 
-        }
-
-        /* Node Styling */
         .node {
             display: inline-flex;
             align-items: center;
@@ -179,18 +124,18 @@
             background-color: var(--node-bg);
             cursor: pointer;
             
-            /* Enhanced Tibetan Font Stack */
             font-family: 'Monlam Uni Ouchan', 'Qomolangma', 'Qomolangma-Uchen Sarchen', 'Microsoft Himalaya', 'Tibetan Machine Uni', 'Noto Sans Tibetan', sans-serif;
-            font-size: 20px; /* Base size suitable for Tibetan scripts */
-            line-height: 1.8; /* Ensures tall vertical stacks are not clipped */
-            word-wrap: break-word;
+            font-size: 20px;
+            line-height: 1.8;
             
             user-select: none;
             white-space: nowrap;
             transition: background 0.2s, box-shadow 0.2s, border-color 0.2s;
-            position: relative;
-            z-index: 1; 
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            
+            /* Expand to fill foreignObject bounds perfectly */
+            width: 100%;
+            height: 100%;
         }
 
         .node > span.node-text {
@@ -217,13 +162,8 @@
             transition: transform 0.3s ease;
         }
 
-        .collapsed > .node .toggle-icon {
+        .node.collapsed .toggle-icon {
             transform: rotate(-90deg);
-        }
-
-        /* Collapsed State */
-        .tree-li.collapsed > .tree-ul {
-            display: none;
         }
 
     </style>
@@ -249,15 +189,16 @@
     </div>
 
     <div id="tree-container">
-        <div id="tree-wrapper">
-            <ul class="tree-ul root-ul" id="root-ul">
-                <!-- Tree will be injected here -->
-            </ul>
-        </div>
+        <svg id="main-svg">
+            <g id="main-g">
+                <g id="links-group"></g>
+                <g id="nodes-group"></g>
+            </g>
+        </svg>
     </div>
 
     <script>
-        const rawData = `དབུ་མ་དགོངས་པ་རབ་གསལ།
+        const rawData = `༄༅། དབུ་མ་དགོངས་པ་རབ་གསལ།
 	༡༽ མཚན་གྱི་དོན།
 	༢༽ འགྱུར་གྱི་ཕྱག།
 	༣༽ གཞུང་གི་དོན།
@@ -382,11 +323,11 @@
 		༣༽ བསྟན་བཅོས་ཇི་ལྟར་བརྩམས་པའི་ཚུལ།
 	༤༽ མཇུག་གི་དོན།`;
 
-        // 1. Parse Data to Tree Structure
+        // 1. Data Parsing & Hierarchy Tree Creation
         function parseOutline(text) {
             const lines = text.split('\n');
-            const root = { text: lines[0].trim(), children: [], level: -1 };
-            const stack = [root];
+            const rootData = { text: lines[0].trim(), children: [], level: -1 };
+            const stack = [rootData];
 
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i];
@@ -396,193 +337,411 @@
                 const level = levelMatch ? levelMatch[0].length : 0;
                 const nodeText = line.trim();
                 
-                const node = { text: nodeText, children: [], level: level };
+                const nodeData = { text: nodeText, children: [], level: level };
 
                 while (stack.length > 0 && stack[stack.length - 1].level >= level) {
                     stack.pop();
                 }
 
                 const parent = stack[stack.length - 1];
-                parent.children.push(node);
-                stack.push(node);
+                parent.children.push(nodeData);
+                stack.push(nodeData);
             }
-            return root;
+            return rootData;
         }
 
-        // 2. Render HTML DOM Tree
-        function renderNode(node, isRoot = false) {
-            const li = document.createElement('li');
-            li.className = 'tree-li' + (isRoot ? ' root-li' : ''); // Start uncollapsed to measure sizes
-            
-            const div = document.createElement('div');
-            div.className = 'node' + (node.children.length > 0 ? ' has-children' : '');
-            div.setAttribute('data-level', node.level); // Store hierarchy level
-            
-            const textSpan = document.createElement('span');
-            textSpan.className = 'node-text';
-            textSpan.textContent = node.text;
-            div.appendChild(textSpan);
-            
-            if (node.children.length > 0) {
-                const icon = document.createElement('span');
-                icon.className = 'toggle-icon';
-                icon.innerHTML = '▼';
-                div.appendChild(icon);
-
-                div.onclick = function(e) {
-                    e.stopPropagation();
-                    li.classList.toggle('collapsed');
-                    triggerAutoZoom();
-                };
-            }
-            
-            li.appendChild(div);
-
-            if (node.children.length > 0) {
-                const ul = document.createElement('ul');
-                ul.className = 'tree-ul';
-                node.children.forEach(child => {
-                    ul.appendChild(renderNode(child));
-                });
-                li.appendChild(ul);
-            }
-            return li;
-        }
-
-        // Apply max width/height by structural level
-        function normalizeNodeSizes() {
-            // Need a slight delay to allow fonts (like Google Fonts) to render before calculating dimensions
-            setTimeout(() => {
-                const nodes = document.querySelectorAll('.node');
-                const levels = {};
+        let nodeIdCounter = 0;
+        class TreeNode {
+            constructor(data, parent = null, depth = 0) {
+                this.id = ++nodeIdCounter;
+                this.data = data;
+                this.parent = parent;
+                this.depth = depth;
+                this.cx = 0;
+                this.cy = 0;
+                this.cx0 = 0;
+                this.cy0 = 0;
+                this.width = 0;
+                this.height = 0;
                 
-                // Group nodes by their structural depth
-                nodes.forEach(node => {
-                    // Temporarily unset width to measure natural width
-                    node.style.width = 'auto';
-                    node.style.height = 'auto';
+                this.children = null;
+                this._children = null;
 
-                    const level = node.getAttribute('data-level');
-                    if (!levels[level]) levels[level] = [];
-                    levels[level].push(node);
-                });
-                
-                // Apply maximum dimensions to all nodes sharing the same level
-                for (const level in levels) {
-                    let maxWidth = 0;
-                    let maxHeight = 0;
-                    
-                    // First pass: find biggest natural dimensions
-                    levels[level].forEach(node => {
-                        if (node.offsetWidth > maxWidth) maxWidth = node.offsetWidth;
-                        if (node.offsetHeight > maxHeight) maxHeight = node.offsetHeight;
-                    });
-                    
-                    // Second pass: apply uniformly
-                    levels[level].forEach(node => {
-                        node.style.width = maxWidth + 'px';
-                        node.style.height = maxHeight + 'px';
+                if (data.children && data.children.length > 0) {
+                    this.children = data.children.map(c => new TreeNode(c, this, depth + 1));
+                }
+            }
+
+            descendants() {
+                const list = [this];
+                if (this.children) {
+                    this.children.forEach(c => list.push(...c.descendants()));
+                }
+                return list;
+            }
+
+            links() {
+                const list = [];
+                if (this.children) {
+                    this.children.forEach(c => {
+                        list.push({ source: this, target: c });
+                        list.push(...c.links());
                     });
                 }
+                return list;
+            }
 
-                // After sizes are calculated, apply collapse state to non-root nodes
-                document.querySelectorAll('.tree-li').forEach(li => {
-                    if (!li.classList.contains('root-li')) {
-                        li.classList.add('collapsed');
-                    }
-                });
-
-                // Make visible and trigger Auto-Zoom
-                const treeWrapper = document.getElementById('tree-wrapper');
-                treeWrapper.style.visibility = 'visible';
-                triggerAutoZoom();
-
-            }, 300); // 300ms delay for fonts to load
+            each(callback) {
+                callback(this);
+                const allChildren = this.children || this._children;
+                if (allChildren) {
+                    allChildren.forEach(c => c.each(callback));
+                }
+            }
         }
 
-        // Initialize Tree
         const treeData = parseOutline(rawData);
-        const rootUl = document.getElementById('root-ul');
-        const treeWrapper = document.getElementById('tree-wrapper');
-        
-        // Render nodes and append to DOM (invisible state)
-        rootUl.appendChild(renderNode(treeData, true));
+        const root = new TreeNode(treeData);
 
-        // Let the window load before normalizing (to ensure web fonts have mostly painted)
+        // Utility to escape HTML
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // 2. Measure DOM nodes properly for variable text lengths
+        function computeNodeSizes(rootNode) {
+            const dummy = document.createElement('div');
+            dummy.style.position = 'absolute';
+            dummy.style.visibility = 'hidden';
+            dummy.style.whiteSpace = 'nowrap';
+            document.body.appendChild(dummy);
+
+            const widths = [];
+            const heights = [];
+
+            rootNode.each(node => {
+                const isHasChildren = node.children || node._children;
+                const div = document.createElement('div');
+                div.className = 'node' + (isHasChildren ? ' has-children' : '');
+                div.style.width = 'auto'; 
+                div.style.height = 'auto';
+                
+                div.innerHTML = `<span class="node-text">${escapeHtml(node.data.text)}</span>` + 
+                                (isHasChildren ? `<span class="toggle-icon">▼</span>` : '');
+                
+                dummy.appendChild(div);
+                
+                // Track natural sizes
+                node._naturalWidth = div.offsetWidth + 2; 
+                node._naturalHeight = div.offsetHeight + 2;
+                
+                // Track max per level for uniformly pleasing columns
+                widths[node.depth] = Math.max(widths[node.depth] || 0, node._naturalWidth);
+                heights[node.depth] = Math.max(heights[node.depth] || 0, node._naturalHeight);
+                
+                dummy.removeChild(div);
+            });
+            document.body.removeChild(dummy);
+
+            rootNode.each(node => {
+                node.width = widths[node.depth];
+                node.height = heights[node.depth];
+            });
+        }
+
+        // 3. Layout Engine
+        function layoutTree(rootNode) {
+            const levelWidths = [];
+            rootNode.each(node => {
+                if (!levelWidths[node.depth]) levelWidths[node.depth] = node.width;
+            });
+
+            const levelX = [0];
+            const hGap = 40; 
+            const vGap = 16;
+            
+            for (let i = 1; i <= levelWidths.length; i++) {
+                levelX[i] = levelX[i - 1] + (levelWidths[i - 1] || 0) + hGap;
+            }
+
+            let currentY = 0;
+
+            function computePositions(node) {
+                node.cx = levelX[node.depth];
+
+                if (!node.children || node.children.length === 0) {
+                    node.cy = currentY;
+                    currentY += node.height + vGap;
+                } else {
+                    node.children.forEach(c => computePositions(c));
+                    const firstChild = node.children[0];
+                    const lastChild = node.children[node.children.length - 1];
+                    node.cy = (firstChild.cy + lastChild.cy) / 2;
+                }
+            }
+
+            computePositions(rootNode);
+        }
+
+        // 4. Update & Render SVG Connectors + Nodes
+        const SVG_NS = "http://www.w3.org/2000/svg";
+        const nodeElemMap = new Map();
+        const linkElemMap = new Map();
+
+        let currentScale = 1.0;
+
+        function getLinkPath(s, t) {
+            const sX = s.cx + (s.width || 0);
+            const sY = s.cy;
+            const tX = t.cx;
+            const tY = t.cy;
+            if (sX === tX && sY === tY) return `M ${sX} ${sY} L ${sX} ${sY}`;
+            return `M ${sX} ${sY} C ${(sX + tX) / 2} ${sY}, ${(sX + tX) / 2} ${tY}, ${tX} ${tY}`;
+        }
+
+        function update(source, autoFit = false) {
+            layoutTree(root);
+
+            const nodes = root.descendants();
+            const links = root.links();
+
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            nodes.forEach(d => {
+                if (d.cx < minX) minX = d.cx;
+                if (d.cx + d.width > maxX) maxX = d.cx + d.width;
+                if (d.cy - d.height/2 < minY) minY = d.cy - d.height/2;
+                if (d.cy + d.height/2 > maxY) maxY = d.cy + d.height/2;
+            });
+
+            if (minX === Infinity) { minX = 0; maxX = 0; minY = 0; maxY = 0; }
+
+            const scrollContainer = document.getElementById('tree-container');
+            const autoZoomEnabled = document.getElementById('autoZoomCheck').checked;
+            
+            if (autoFit && autoZoomEnabled) {
+                const availableWidth = scrollContainer.clientWidth - 80;
+                const availableHeight = scrollContainer.clientHeight - 80;
+                
+                const treeWidth = maxX - minX;
+                const treeHeight = maxY - minY;
+
+                const scaleX = availableWidth / (treeWidth || 1);
+                const scaleY = availableHeight / (treeHeight || 1);
+
+                let fitScale = Math.min(1.2, scaleX, scaleY);
+                currentScale = Math.max(0.1, Math.min(5.0, fitScale));
+                document.getElementById('zoomInput').value = Math.round(currentScale * 100);
+            }
+
+            const margin = { top: 40, right: 40, bottom: 40, left: 40 };
+            const totalHeight = (maxY - minY) * currentScale + margin.top + margin.bottom;
+            const totalWidth = (maxX - minX) * currentScale + margin.left + margin.right;
+
+            const mainSvg = document.getElementById('main-svg');
+            mainSvg.setAttribute("width", Math.max(scrollContainer.clientWidth, totalWidth));
+            mainSvg.setAttribute("height", Math.max(scrollContainer.clientHeight, totalHeight));
+
+            const translateX = margin.left - minX * currentScale;
+            const translateY = margin.top - minY * currentScale;
+
+            const mainG = document.getElementById('main-g');
+            mainG.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
+
+            // Render Links
+            const linksGroup = document.getElementById('links-group');
+            const activeLinkIds = new Set(links.map(l => l.target.id));
+
+            links.forEach(l => {
+                const linkId = l.target.id;
+                let path = linkElemMap.get(linkId);
+                const pathData = getLinkPath(l.source, l.target);
+
+                if (!path) {
+                    path = document.createElementNS(SVG_NS, 'path');
+                    path.setAttribute('class', 'link');
+                    const spawnPoint = { cx: (source.cx0 || 0) + (source.width || 0), cy: source.cy0 || 0, width: 0 };
+                    path.setAttribute('d', getLinkPath(spawnPoint, spawnPoint));
+                    path.style.opacity = '0';
+                    linksGroup.appendChild(path);
+                    linkElemMap.set(linkId, path);
+
+                    requestAnimationFrame(() => {
+                        path.setAttribute('d', pathData);
+                        path.style.opacity = '1';
+                    });
+                } else {
+                    path.setAttribute('d', pathData);
+                    path.style.opacity = '1';
+                }
+            });
+
+            linkElemMap.forEach((path, linkId) => {
+                if (!activeLinkIds.has(linkId)) {
+                    const exitPoint = { cx: (source.cx || 0) + (source.width || 0), cy: source.cy || 0, width: 0 };
+                    path.setAttribute('d', getLinkPath(exitPoint, exitPoint));
+                    path.style.opacity = '0';
+                    setTimeout(() => {
+                        if (path.parentNode) path.parentNode.removeChild(path);
+                        linkElemMap.delete(linkId);
+                    }, 400);
+                }
+            });
+
+            // Render Nodes
+            const nodesGroup = document.getElementById('nodes-group');
+            const activeNodeIds = new Set(nodes.map(n => n.id));
+
+            nodes.forEach(d => {
+                let nodeG = nodeElemMap.get(d.id);
+                const isHasChildren = !!(d.children || d._children);
+                const isCollapsed = !d.children;
+
+                if (!nodeG) {
+                    nodeG = document.createElementNS(SVG_NS, 'g');
+                    nodeG.setAttribute('class', 'node-g');
+                    nodeG.style.transform = `translate(${source.cx0 || 0}px, ${source.cy0 || 0}px)`;
+                    nodeG.style.opacity = '0';
+
+                    const fo = document.createElementNS(SVG_NS, 'foreignObject');
+                    fo.setAttribute('class', 'node-foreignObject');
+                    fo.setAttribute('width', d.width);
+                    fo.setAttribute('height', d.height);
+                    fo.setAttribute('x', 0);
+                    fo.setAttribute('y', -d.height / 2);
+                    
+                    const htmlDiv = document.createElement('div');
+                    htmlDiv.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+                    htmlDiv.className = 'node' + (isHasChildren ? ' has-children' : '') + (isCollapsed ? ' collapsed' : '');
+                    
+                    htmlDiv.innerHTML = `<span class="node-text">${escapeHtml(d.data.text)}</span>` + 
+                                    (isHasChildren ? `<span class="toggle-icon">▼</span>` : '');
+                    
+                    htmlDiv.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (d.children) {
+                            d._children = d.children;
+                            d.children = null;
+                        } else {
+                            d.children = d._children;
+                            d._children = null;
+                        }
+                        update(d, document.getElementById('autoZoomCheck').checked);
+                    });
+
+                    fo.appendChild(htmlDiv);
+                    nodeG.appendChild(fo);
+                    nodesGroup.appendChild(nodeG);
+                    nodeElemMap.set(d.id, nodeG);
+
+                    requestAnimationFrame(() => {
+                        nodeG.style.transform = `translate(${d.cx}px, ${d.cy}px)`;
+                        nodeG.style.opacity = '1';
+                    });
+                } else {
+                    const htmlDiv = nodeG.querySelector('.node');
+                    if (htmlDiv) {
+                        if (isCollapsed) htmlDiv.classList.add('collapsed');
+                        else htmlDiv.classList.remove('collapsed');
+                        
+                        nodeG.querySelector('foreignObject').setAttribute('width', d.width);
+                        nodeG.querySelector('foreignObject').setAttribute('height', d.height);
+                        nodeG.querySelector('foreignObject').setAttribute('y', -d.height / 2);
+                    }
+
+                    nodeG.style.transform = `translate(${d.cx}px, ${d.cy}px)`;
+                    nodeG.style.opacity = '1';
+                }
+            });
+
+            nodeElemMap.forEach((nodeG, nodeId) => {
+                if (!activeNodeIds.has(nodeId)) {
+                    nodeG.style.transform = `translate(${source.cx || 0}px, ${source.cy || 0}px)`;
+                    nodeG.style.opacity = '0';
+                    setTimeout(() => {
+                        if (nodeG.parentNode) nodeG.parentNode.removeChild(nodeG);
+                        nodeElemMap.delete(nodeId);
+                    }, 400);
+                }
+            });
+
+            nodes.forEach(d => { d.cx0 = d.cx; d.cy0 = d.cy; });
+        }
+
+        // Initialize state (Collapse all except root)
+        function collapseAllHelper(d) {
+            if (d.children && d.children.length > 0) {
+                d._children = d.children;
+                d._children.forEach(collapseAllHelper);
+                d.children = null;
+            }
+        }
+        if (root.children) {
+            root.children.forEach(collapseAllHelper);
+        }
+
+        // Setup and Initial Render
+        function initRender() {
+            computeNodeSizes(root);
+            update(root, true);
+        }
+        
+        initRender();
+        document.getElementById('main-svg').style.opacity = '1';
+
+        // Re-measure after fonts load natively
         window.onload = () => {
-            normalizeNodeSizes();
+            setTimeout(initRender, 300);
         };
 
-        // 3. Zoom Logic
-        let currentZoom = 100;
-        const zoomInput = document.getElementById('zoomInput');
-        const treeContainer = document.getElementById('tree-container');
-        const autoZoomCheck = document.getElementById('autoZoomCheck');
-
+        // Zoom and Toolbar Functions
         function setZoom(percentage) {
-            currentZoom = Math.max(10, Math.min(percentage, 500));
-            zoomInput.value = Math.round(currentZoom);
-            treeWrapper.style.transform = `scale(${currentZoom / 100})`;
+            currentScale = Math.max(0.1, Math.min(5.0, percentage / 100));
+            document.getElementById('zoomInput').value = Math.round(currentScale * 100);
+            update(root); 
         }
 
         function changeZoom(delta) {
-            autoZoomCheck.checked = false; // Disable auto zoom on manual interaction
-            setZoom(currentZoom + delta);
+            document.getElementById('autoZoomCheck').checked = false;
+            setZoom(Math.round(currentScale * 100) + delta);
         }
 
         function applyManualZoom() {
-            autoZoomCheck.checked = false;
-            let val = parseFloat(zoomInput.value);
+            document.getElementById('autoZoomCheck').checked = false;
+            let val = parseFloat(document.getElementById('zoomInput').value);
             if (!isNaN(val)) setZoom(val);
         }
 
         function triggerAutoZoom() {
-            if (!autoZoomCheck.checked) return;
-            
-            setTimeout(() => {
-                const containerWidth = treeContainer.clientWidth - 80; 
-                const containerHeight = treeContainer.clientHeight - 80;
-                
-                treeWrapper.style.transform = 'scale(1)';
-                const contentWidth = treeWrapper.offsetWidth;
-                const contentHeight = treeWrapper.offsetHeight;
-                
-                if (contentWidth > 0 && contentHeight > 0) {
-                    const scaleX = containerWidth / contentWidth;
-                    const scaleY = containerHeight / contentHeight;
-                    let scale = Math.min(scaleX, scaleY);
-                    
-                    scale = Math.max(0.1, Math.min(scale, 1.2));
-                    setZoom(scale * 100);
-                } else {
-                    setZoom(currentZoom);
-                }
-            }, 50);
+            if (document.getElementById('autoZoomCheck').checked) {
+                update(root, true);
+            }
         }
 
-        // 4. Expand / Collapse Functions
         function expandAll() {
-            document.querySelectorAll('.tree-li').forEach(li => {
-                li.classList.remove('collapsed');
+            root.each(d => {
+                if (d._children) {
+                    d.children = d._children;
+                    d._children = null;
+                }
             });
-            triggerAutoZoom();
+            update(root, document.getElementById('autoZoomCheck').checked);
         }
 
         function collapseAll() {
-            document.querySelectorAll('.tree-li').forEach(li => {
-                if (!li.classList.contains('root-li')) {
-                    li.classList.add('collapsed');
-                }
-            });
-            triggerAutoZoom();
+            if (root.children) root.children.forEach(collapseAllHelper);
+            update(root, document.getElementById('autoZoomCheck').checked);
         }
 
-        // Re-adjust zoom when window is resized if auto-zoom is checked
-        window.addEventListener('resize', () => {
-            if (autoZoomCheck.checked) {
-                triggerAutoZoom();
+        // Event Listeners
+        window.addEventListener('resize', triggerAutoZoom);
+
+        document.getElementById('tree-container').addEventListener('wheel', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                const delta = e.deltaY < 0 ? 10 : -10;
+                changeZoom(delta);
             }
-        });
+        }, { passive: false });
 
     </script>
 </body>
