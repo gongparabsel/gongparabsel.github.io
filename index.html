@@ -76,6 +76,14 @@
         button:hover {
             background-color: #0056b3;
         }
+        
+        .btn-reset {
+            background-color: #ef4444;
+        }
+
+        .btn-reset:hover {
+            background-color: #dc2626;
+        }
 
         /* Container & SVG Layout */
         #tree-container {
@@ -166,14 +174,38 @@
             transform: rotate(-90deg);
         }
 
+        /* Custom Context Menu */
+        #context-menu {
+            display: none;
+            position: absolute;
+            z-index: 1000;
+            background-color: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 4px 0;
+            min-width: 160px;
+        }
+        
+        .context-menu-item {
+            padding: 10px 16px;
+            font-size: 14px;
+            color: #334155;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .context-menu-item:hover {
+            background-color: #f1f5f9;
+        }
+
     </style>
 </head>
 <body>
 
     <div id="toolbar">
         <div class="tool-group">
-            <button onclick="expandAll()">Expand All</button>
-            <button onclick="collapseAll()">Collapse All</button>
+            <button class="btn-reset" onclick="resetTree()">Reset</button>
         </div>
         <div class="divider"></div>
         <div class="tool-group">
@@ -195,6 +227,11 @@
                 <g id="nodes-group"></g>
             </g>
         </svg>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="context-menu">
+        <div class="context-menu-item" id="btn-set-root">Set as New Root</div>
     </div>
 
     <script>
@@ -400,8 +437,8 @@
             }
         }
 
-        const treeData = parseOutline(rawData);
-        const root = new TreeNode(treeData);
+        const originalTreeData = parseOutline(rawData);
+        let root = new TreeNode(originalTreeData);
 
         // Utility to escape HTML
         function escapeHtml(str) {
@@ -627,6 +664,30 @@
                         }
                         update(d, document.getElementById('autoZoomCheck').checked);
                     });
+                    
+                    // Context Menu Trigger (Right Click)
+                    htmlDiv.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        contextMenuNode = d;
+                        const contextMenu = document.getElementById('context-menu');
+                        contextMenu.style.display = 'block';
+                        
+                        let x = e.pageX;
+                        let y = e.pageY;
+                        
+                        // Prevent context menu from rendering out of viewport
+                        if (x + contextMenu.offsetWidth > window.innerWidth) {
+                            x = window.innerWidth - contextMenu.offsetWidth - 10;
+                        }
+                        if (y + contextMenu.offsetHeight > window.innerHeight) {
+                            y = window.innerHeight - contextMenu.offsetHeight - 10;
+                        }
+                        
+                        contextMenu.style.left = x + 'px';
+                        contextMenu.style.top = y + 'px';
+                    });
 
                     fo.appendChild(htmlDiv);
                     nodeG.appendChild(fo);
@@ -675,8 +736,26 @@
                 d.children = null;
             }
         }
-        if (root.children) {
-            root.children.forEach(collapseAllHelper);
+
+        // Replace Root and Re-render Tree
+        function setNewRoot(data) {
+            root = new TreeNode(data);
+            if (root.children) {
+                root.children.forEach(collapseAllHelper);
+            }
+            
+            // Clear DOM & Memory to ensure a clean reset and prevent transition ghosting
+            document.getElementById('links-group').innerHTML = '';
+            document.getElementById('nodes-group').innerHTML = '';
+            linkElemMap.clear();
+            nodeElemMap.clear();
+            
+            initRender();
+        }
+
+        // Reset to entirely original tree
+        function resetTree() {
+            setNewRoot(originalTreeData);
         }
 
         // Setup and Initial Render
@@ -685,6 +764,10 @@
             update(root, true);
         }
         
+        // Initial setup execution
+        if (root.children) {
+            root.children.forEach(collapseAllHelper);
+        }
         initRender();
         document.getElementById('main-svg').style.opacity = '1';
 
@@ -717,22 +800,7 @@
             }
         }
 
-        function expandAll() {
-            root.each(d => {
-                if (d._children) {
-                    d.children = d._children;
-                    d._children = null;
-                }
-            });
-            update(root, document.getElementById('autoZoomCheck').checked);
-        }
-
-        function collapseAll() {
-            if (root.children) root.children.forEach(collapseAllHelper);
-            update(root, document.getElementById('autoZoomCheck').checked);
-        }
-
-        // Event Listeners
+        // Global Event Listeners
         window.addEventListener('resize', triggerAutoZoom);
 
         document.getElementById('tree-container').addEventListener('wheel', (e) => {
@@ -742,6 +810,18 @@
                 changeZoom(delta);
             }
         }, { passive: false });
+
+        // Context Menu Functionality
+        let contextMenuNode = null;
+        document.addEventListener('click', () => {
+            document.getElementById('context-menu').style.display = 'none';
+        });
+
+        document.getElementById('btn-set-root').addEventListener('click', () => {
+            if (contextMenuNode) {
+                setNewRoot(contextMenuNode.data);
+            }
+        });
 
     </script>
 </body>
