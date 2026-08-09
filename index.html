@@ -84,6 +84,12 @@
         .btn-reset:hover {
             background-color: #dc2626;
         }
+        
+        .toolbar-note {
+            font-size: 14px;
+            color: #64748b;
+            font-style: italic;
+        }
 
         /* Container & SVG Layout */
         #tree-container {
@@ -218,6 +224,12 @@
             <input type="checkbox" id="autoZoomCheck" onchange="triggerAutoZoom()" checked>
             <label for="autoZoomCheck" style="font-size: 14px; user-select: none; cursor: pointer;">Auto-Zoom to Fit</label>
         </div>
+        <div class="divider"></div>
+        <div class="tool-group">
+            <span class="toolbar-note">Right-click on a node to set it as a temporary root node</span>
+        </div>
+    </div>
+
     </div>
 
     <div id="tree-container">
