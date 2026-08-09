@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>དབུ་མ་ལ་འཇུག་པའི་རྣམ་བཤད་དགོངས་པ་རབ་གསལ། - Horizontal Outline with SVG Connectors</title>
+    <!-- Prevents Chrome's automatic favicon.ico request, which otherwise logs a
+         spurious "Unsafe attempt to load URL ... 'file:' URLs are treated as
+         unique security origins" console message on every load of this page
+         when opened directly as a local file. -->
+    <link rel="icon" href="data:,">
     
     <!-- Import Noto Sans Tibetan as a robust web fallback for Tibetan scripts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -227,6 +232,10 @@
         <div class="divider"></div>
         <div class="tool-group">
             <span class="toolbar-note">Right-click on a node to set it as a temporary root node</span>
+        </div>
+        <div class="divider"></div>
+        <div class="tool-group">
+            <button id="btn-download-image" onclick="downloadAsImage()">Download as Image</button>
         </div>
     </div>
 
@@ -834,6 +843,242 @@
                 setNewRoot(contextMenuNode.data);
             }
         });
+
+        // ---- Download as Image (JPEG) ----
+
+        // Some sandboxed/embedded preview consoles only implement a subset of the
+        // console API (e.g. missing console.info). Route all logging through this
+        // so a missing method never breaks the export itself.
+        function safeLog(level, ...args) {
+            try {
+                if (typeof console !== 'undefined' && typeof console[level] === 'function') {
+                    console[level](...args);
+                } else if (typeof console !== 'undefined' && typeof console.log === 'function') {
+                    console.log(...args);
+                }
+            } catch (e) { /* logging must never throw */ }
+        }
+
+        function blobToDataURL(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        // Best-effort: fetch the Google Font CSS + font files and inline them as
+        // base64 data URIs so the Tibetan glyphs render correctly inside the
+        // exported SVG image (external fonts are otherwise not guaranteed to
+        // load when an SVG is rasterized via <img>/canvas).
+        async function getEmbeddedFontCss() {
+            // Requests from a file:// page have origin "null", and Google Fonts'
+            // CORS policy rejects that origin outright (the browser also logs this
+            // as a network error in the console, which JS cannot suppress). Skip
+            // the attempt entirely in that case rather than firing a doomed request.
+            if (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
+                throw new Error('Skipping font embed fetch: page loaded via file:// (CORS would block it)');
+            }
+            if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                throw new Error('Offline: skipping font embed fetch');
+            }
+
+            const cssUrl = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Tibetan:wght@400;600&display=swap';
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            let cssText;
+            try {
+                cssText = await (await fetch(cssUrl, { signal: controller.signal })).text();
+            } finally {
+                clearTimeout(timeoutId);
+            }
+            const fontUrls = [...cssText.matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/g)].map(m => m[1]);
+
+            let embeddedCss = cssText;
+            for (const fontUrl of fontUrls) {
+                try {
+                    const fontBlob = await (await fetch(fontUrl)).blob();
+                    const dataUrl = await blobToDataURL(fontBlob);
+                    embeddedCss = embeddedCss.split(fontUrl).join(dataUrl);
+                } catch (e) {
+                    // If a particular font file can't be fetched, skip it and keep going.
+                    safeLog('warn', 'Could not embed font file for export:', fontUrl, e);
+                }
+            }
+            return embeddedCss;
+        }
+
+        async function downloadAsImage() {
+            const btn = document.getElementById('btn-download-image');
+            const originalLabel = btn.textContent;
+            btn.textContent = 'Preparing…';
+            btn.disabled = true;
+
+            try {
+                const sourceSvg = document.getElementById('main-svg');
+                const width = parseFloat(sourceSvg.getAttribute('width')) || sourceSvg.clientWidth || 800;
+                const height = parseFloat(sourceSvg.getAttribute('height')) || sourceSvg.clientHeight || 600;
+
+                // Clone the live SVG (including foreignObject/HTML nodes) so we don't
+                // disturb the on-screen tree while preparing the export.
+                const clone = sourceSvg.cloneNode(true);
+                clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+                clone.setAttribute('width', width);
+                clone.setAttribute('height', height);
+                clone.style.opacity = '1';
+
+                // Make sure whatever fonts the page already loaded (e.g. Noto Sans
+                // Tibetan via the <link> in <head>) are fully ready before we snapshot.
+                try {
+                    if (document.fonts && document.fonts.ready) {
+                        await document.fonts.ready;
+                    }
+                } catch (e) { /* not fatal, continue with export */ }
+
+                // Best-effort extra step: try to inline the web font as base64 so it's
+                // guaranteed to render even in browsers that restrict external
+                // resource loading for SVGs converted to images. This requires
+                // network access from the page's origin; if it's unavailable
+                // (e.g. viewing the file as file:// with fetch restricted, or an
+                // offline/sandboxed environment) we silently fall back to whatever
+                // font is already loaded in the document — the export still works.
+                let fontFaceCss = '';
+                try {
+                    fontFaceCss = await getEmbeddedFontCss();
+                } catch (e) {
+                    safeLog('log', 'Font embedding skipped (using already-loaded document fonts instead):', e.message || e);
+                }
+
+                // Inline the styles the on-page stylesheet normally provides, since a
+                // standalone serialized SVG does not inherit the document's <style>.
+                const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+                style.textContent = `
+                    ${fontFaceCss}
+                    .node {
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        box-sizing: border-box;
+                        border: 1px solid #adb5bd;
+                        border-radius: 8px;
+                        padding: 4px 12px;
+                        background-color: #ffffff;
+                        font-family: 'Monlam Uni Ouchan', 'Qomolangma', 'Qomolangma-Uchen Sarchen', 'Microsoft Himalaya', 'Tibetan Machine Uni', 'Noto Sans Tibetan', sans-serif;
+                        font-size: 20px;
+                        line-height: 1.8;
+                        white-space: nowrap;
+                        width: 100%;
+                        height: 100%;
+                        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                    }
+                    .node > span.node-text { flex-grow: 1; text-align: left; }
+                    .node.has-children { background-color: #e3f2fd; border-color: #90caf9; }
+                    .toggle-icon { font-size: 10px; color: #555; margin-left: 12px; flex-shrink: 0; display: inline-block; }
+                    .node.collapsed .toggle-icon { transform: rotate(-90deg); }
+                    .link { fill: none; stroke: #9ca3af; stroke-width: 1.5px; }
+                `;
+                clone.insertBefore(style, clone.firstChild);
+
+                // JPEG has no transparency, so paint an explicit background first.
+                const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                bgRect.setAttribute('x', '0');
+                bgRect.setAttribute('y', '0');
+                bgRect.setAttribute('width', String(width));
+                bgRect.setAttribute('height', String(height));
+                bgRect.setAttribute('fill', '#f8f9fa');
+                clone.insertBefore(bgRect, style.nextSibling);
+
+                const svgString = new XMLSerializer().serializeToString(clone);
+
+                // Use a data: URI instead of a blob: URL for the source image.
+                // Some sandboxed/embedded preview environments block blob: URLs
+                // (e.g. via CSP) for <img>/Image sources even though data: URIs
+                // work fine, so this is the more broadly compatible choice.
+                let svgDataUrl;
+                try {
+                    svgDataUrl = 'data:image/svg+xml;charset=utf-8;base64,' +
+                        btoa(unescape(encodeURIComponent(svgString)));
+                } catch (encodeErr) {
+                    // Fallback: URI-encode directly (no base64) if btoa/unescape choke
+                    // on any character in the content.
+                    svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+                }
+
+                const scaleFactor = 2; // render at 2x for a sharper, higher-res JPEG
+                const img = new Image();
+
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.round(width * scaleFactor);
+                    canvas.height = Math.round(height * scaleFactor);
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#f8f9fa';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    const triggerDownload = (href, isObjectUrl) => {
+                        if (!href) {
+                            safeLog('error', 'No image data produced for download.');
+                            alert('Sorry, the image could not be generated. Please try again.');
+                            btn.textContent = originalLabel;
+                            btn.disabled = false;
+                            return;
+                        }
+                        const link = document.createElement('a');
+                        link.download = 'dbu-ma-outline-tree.jpg';
+                        link.href = href;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        if (isObjectUrl) {
+                            setTimeout(() => URL.revokeObjectURL(href), 2000);
+                        }
+                        btn.textContent = originalLabel;
+                        btn.disabled = false;
+                    };
+
+                    // Prefer a Blob + object URL for the actual download: this is
+                    // large image data, and large data: URIs used as an
+                    // <a download> href are known to fail (or misbehave) on
+                    // file:// pages in Chrome. Fall back to a data: URI only if
+                    // Blob creation isn't available for some reason.
+                    if (canvas.toBlob) {
+                        canvas.toBlob((jpegBlob) => {
+                            if (!jpegBlob) {
+                                let fallbackUrl = null;
+                                try { fallbackUrl = canvas.toDataURL('image/jpeg', 0.95); } catch (e) { /* ignore */ }
+                                triggerDownload(fallbackUrl, false);
+                                return;
+                            }
+                            triggerDownload(URL.createObjectURL(jpegBlob), true);
+                        }, 'image/jpeg', 0.95);
+                    } else {
+                        let jpegDataUrl = null;
+                        try {
+                            jpegDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+                        } catch (drawErr) {
+                            safeLog('error', 'Could not export canvas to JPEG:', drawErr);
+                        }
+                        triggerDownload(jpegDataUrl, false);
+                    }
+                };
+
+                img.onerror = (e) => {
+                    safeLog('error', 'Failed to render SVG to image for export:', (e && e.type) || e);
+                    alert('Sorry, the image could not be generated. Please try again.');
+                    btn.textContent = originalLabel;
+                    btn.disabled = false;
+                };
+
+                img.src = svgDataUrl;
+            } catch (err) {
+                safeLog('error', 'Download as Image failed:', err);
+                alert('Sorry, something went wrong while generating the image.');
+                btn.textContent = originalLabel;
+                btn.disabled = false;
+            }
+        }
 
     </script>
 </body>
