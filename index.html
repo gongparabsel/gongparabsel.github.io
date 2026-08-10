@@ -226,7 +226,7 @@
         </div>
         <div class="divider"></div>
         <div class="tool-group">
-            <input type="checkbox" id="autoZoomCheck" onchange="triggerAutoZoom()" checked>
+            <input type="checkbox" id="autoZoomCheck" onchange="triggerAutoZoom()">
             <label for="autoZoomCheck" style="font-size: 14px; user-select: none; cursor: pointer;">Auto-Zoom to Fit</label>
         </div>
         <div class="divider"></div>
@@ -908,14 +908,15 @@
             }
             return embeddedCss;
         }
-
-        async function downloadAsImage() {
+		
+async function downloadAsImage() {
             const btn = document.getElementById('btn-download-image');
             const originalLabel = btn.textContent;
             btn.textContent = 'Preparing…';
             btn.disabled = true;
 
             try {
+                const scaleFactor = 3; // Render at 3x resolution for crisp, non-grainy text
                 const sourceSvg = document.getElementById('main-svg');
                 const width = parseFloat(sourceSvg.getAttribute('width')) || sourceSvg.clientWidth || 800;
                 const height = parseFloat(sourceSvg.getAttribute('height')) || sourceSvg.clientHeight || 600;
@@ -924,25 +925,21 @@
                 // disturb the on-screen tree while preparing the export.
                 const clone = sourceSvg.cloneNode(true);
                 clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-                clone.setAttribute('width', width);
-                clone.setAttribute('height', height);
+                
+                // Scale up the physical dimensions of the SVG while preserving the coordinate space
+                // so the browser renders crisp vectors instead of scaling a blurry bitmap.
+                clone.setAttribute('width', width * scaleFactor);
+                clone.setAttribute('height', height * scaleFactor);
+                clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
                 clone.style.opacity = '1';
 
-                // Make sure whatever fonts the page already loaded (e.g. Noto Sans
-                // Tibetan via the <link> in <head>) are fully ready before we snapshot.
+                // Make sure whatever fonts the page already loaded are fully ready before we snapshot.
                 try {
                     if (document.fonts && document.fonts.ready) {
                         await document.fonts.ready;
                     }
                 } catch (e) { /* not fatal, continue with export */ }
 
-                // Best-effort extra step: try to inline the web font as base64 so it's
-                // guaranteed to render even in browsers that restrict external
-                // resource loading for SVGs converted to images. This requires
-                // network access from the page's origin; if it's unavailable
-                // (e.g. viewing the file as file:// with fetch restricted, or an
-                // offline/sandboxed environment) we silently fall back to whatever
-                // font is already loaded in the document — the export still works.
                 let fontFaceCss = '';
                 try {
                     fontFaceCss = await getEmbeddedFontCss();
@@ -950,8 +947,7 @@
                     safeLog('log', 'Font embedding skipped (using already-loaded document fonts instead):', e.message || e);
                 }
 
-                // Inline the styles the on-page stylesheet normally provides, since a
-                // standalone serialized SVG does not inherit the document's <style>.
+                // Inline the styles the on-page stylesheet normally provides
                 const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
                 style.textContent = `
                     ${fontFaceCss}
@@ -980,7 +976,7 @@
                 `;
                 clone.insertBefore(style, clone.firstChild);
 
-                // JPEG has no transparency, so paint an explicit background first.
+                // Add a solid background so the resulting PNG isn't transparent
                 const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
                 bgRect.setAttribute('x', '0');
                 bgRect.setAttribute('y', '0');
@@ -991,21 +987,14 @@
 
                 const svgString = new XMLSerializer().serializeToString(clone);
 
-                // Use a data: URI instead of a blob: URL for the source image.
-                // Some sandboxed/embedded preview environments block blob: URLs
-                // (e.g. via CSP) for <img>/Image sources even though data: URIs
-                // work fine, so this is the more broadly compatible choice.
                 let svgDataUrl;
                 try {
                     svgDataUrl = 'data:image/svg+xml;charset=utf-8;base64,' +
                         btoa(unescape(encodeURIComponent(svgString)));
                 } catch (encodeErr) {
-                    // Fallback: URI-encode directly (no base64) if btoa/unescape choke
-                    // on any character in the content.
                     svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
                 }
 
-                const scaleFactor = 2; // render at 2x for a sharper, higher-res JPEG
                 const img = new Image();
 
                 img.onload = () => {
@@ -1026,7 +1015,7 @@
                             return;
                         }
                         const link = document.createElement('a');
-                        link.download = 'dbu-ma-outline-tree.jpg';
+                        link.download = 'dbu-ma-outline-tree.png';
                         link.href = href;
                         document.body.appendChild(link);
                         link.click();
@@ -1038,29 +1027,25 @@
                         btn.disabled = false;
                     };
 
-                    // Prefer a Blob + object URL for the actual download: this is
-                    // large image data, and large data: URIs used as an
-                    // <a download> href are known to fail (or misbehave) on
-                    // file:// pages in Chrome. Fall back to a data: URI only if
-                    // Blob creation isn't available for some reason.
+                    // Save as High-Quality PNG instead of JPEG
                     if (canvas.toBlob) {
-                        canvas.toBlob((jpegBlob) => {
-                            if (!jpegBlob) {
+                        canvas.toBlob((blob) => {
+                            if (!blob) {
                                 let fallbackUrl = null;
-                                try { fallbackUrl = canvas.toDataURL('image/jpeg', 0.95); } catch (e) { /* ignore */ }
+                                try { fallbackUrl = canvas.toDataURL('image/png'); } catch (e) { /* ignore */ }
                                 triggerDownload(fallbackUrl, false);
                                 return;
                             }
-                            triggerDownload(URL.createObjectURL(jpegBlob), true);
-                        }, 'image/jpeg', 0.95);
+                            triggerDownload(URL.createObjectURL(blob), true);
+                        }, 'image/png');
                     } else {
-                        let jpegDataUrl = null;
+                        let dataUrl = null;
                         try {
-                            jpegDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+                            dataUrl = canvas.toDataURL('image/png');
                         } catch (drawErr) {
-                            safeLog('error', 'Could not export canvas to JPEG:', drawErr);
+                            safeLog('error', 'Could not export canvas to PNG:', drawErr);
                         }
-                        triggerDownload(jpegDataUrl, false);
+                        triggerDownload(dataUrl, false);
                     }
                 };
 
@@ -1079,7 +1064,6 @@
                 btn.disabled = false;
             }
         }
-
     </script>
 </body>
 </html>
