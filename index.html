@@ -776,6 +776,9 @@
 
         // Reset to entirely original tree
         function resetTree() {
+            document.getElementById('autoZoomCheck').checked = false;
+            currentScale = 1.0;
+            document.getElementById('zoomInput').value = "100";
             setNewRoot(originalTreeData);
         }
 
@@ -915,6 +918,14 @@ async function downloadAsImage() {
             btn.textContent = 'Preparing…';
             btn.disabled = true;
 
+			// Enforce at least 100% zoom before processing the image
+            if (currentScale < 1.0) {
+                document.getElementById('autoZoomCheck').checked = false;
+                setZoom(100);
+                // Allow a brief moment for the SVG transitions (transform/opacity) to finish
+                await new Promise(resolve => setTimeout(resolve, 400));
+            }
+			
             try {
                 const scaleFactor = 3; // Render at 3x resolution for crisp, non-grainy text
                 const sourceSvg = document.getElementById('main-svg');
